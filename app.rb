@@ -1,5 +1,6 @@
 require 'dotenv/load'
 require 'amazon/ecs'
+require 'twitter'
 
 class App
   TARGET_NAME = 'Nintendo Switch'
@@ -34,19 +35,38 @@ end
 
 class Formatter
   def basic_info(item)
-    puts "#{item.get(App::ITEM_NAME_XPATH)} 新品価格 #{item.get(App::PRICE_XPATH)}円"
+    "#{item.get(App::ITEM_NAME_XPATH)} 新品価格 #{item.get(App::PRICE_XPATH)}円"
   end
 
   def met_info(item)
-    puts "#{item.get(App::ITEM_NAME_XPATH)}が#{item.get(App::PRICE_XPATH)}円で販売開始されました。=> #{item.get(App::DETAIL_PAGE_URL_XPATH)}"
+    "#{item.get(App::ITEM_NAME_XPATH)}が#{item.get(App::PRICE_XPATH)}円で販売開始されました。=> #{item.get(App::DETAIL_PAGE_URL_XPATH)}"
+  end
+end
+
+class Notifier
+  attr_reader :client
+
+  def initialize
+    @client = Twitter::REST::Client.new do |config|
+      config.consumer_key        = ENV["TWITTER_CONSUMER_KEY"]
+      config.consumer_secret     = ENV["TWITTER_CONSUMER_SECRET"]
+      config.access_token        = ENV["TWITTER_ACCESS_TOKEN"]
+      config.access_token_secret = ENV["TWITTER_ACCESS_SECRET"]
+    end
+  end
+
+  def send(msg)
+    @client.update("@#{ENV["TWITTER_ID"]} #{msg}")
   end
 end
 
 
 app = App.new
 formatter = Formatter.new
+notifier = Notifier.new
+
 begin
-  app.target_items.each { |item| formatter.basic_info(item) }
+  notifier.send(app.target_items.reduce('') { |a, e| a + formatter.basic_info(e) })
   app.met_items.each { |item| formatter.met_info(item) }
 rescue Amazon::RequestError
   puts 'request limit exceeded.'

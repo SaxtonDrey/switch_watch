@@ -4,3 +4,4 @@ source "https://rubygems.org"
 gem "amazon-ecs"
 gem 'dotenv'
 gem 'pry'
+gem 'twitter'
