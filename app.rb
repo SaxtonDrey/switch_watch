@@ -5,7 +5,7 @@ require 'twitter'
 class App
   TARGET_NAME = 'Nintendo Switch'
   TARGET_ASINS = ['B01NCXFWIZ', 'B0725V538Z'].freeze
-  BORDER_PRICE = 80000
+  BORDER_PRICE = 40000
 
   PRICE_XPATH = 'OfferSummary/LowestNewPrice/Amount'.freeze
   ITEM_NAME_XPATH = 'ItemAttributes/Title'.freeze
@@ -60,14 +60,23 @@ class Notifier
   end
 end
 
+class Logger
+  def log(msg)
+    puts "#{msg} | ran at #{Time.now}"
+  end
+end
+
 
 app = App.new
 formatter = Formatter.new
 notifier = Notifier.new
+logger = Logger.new
 
+logger.log("=======start======")
 begin
-  notifier.send(app.target_items.reduce('') { |a, e| a + formatter.basic_info(e) })
-  app.met_items.each { |item| formatter.met_info(item) }
+  logger.log(app.target_items.reduce('') { |a, e| a + formatter.basic_info(e) })
+  notifier.send(app.met_items.reduce('') { |a, e| a + formatter.met_info(e) })
 rescue Amazon::RequestError
-  puts 'request limit exceeded.'
+  logger.log('request limit exceeded.')
 end
+logger.log("=======end======")
