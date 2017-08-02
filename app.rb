@@ -1,46 +1,38 @@
 require 'bundler/setup'
-require 'dotenv'
+require 'dotenv/load'
 require 'twitter'
 require 'nokogiri'
+require 'open-uri'
 
 class App
-  TARGET_NAME = 'Nintendo Switch'
-  TARGET_ASINS = ['B01NCXFWIZ', 'B0725V538Z'].freeze
+  TARGET_ASINS = ['B01NCXFWIZ', 'B01N5QLLT3'].freeze
   BORDER_PRICE = 40000
+  USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/59.0.3071.115 Safari/537.36'
+  URL_BASE = 'https://www.amazon.co.jp/o/ASIN/'.freeze
 
-  PRICE_XPATH = 'OfferSummary/LowestNewPrice/Amount'.freeze
-  ITEM_NAME_XPATH = 'ItemAttributes/Title'.freeze
-  DETAIL_PAGE_URL_XPATH = 'DetailPageURL'.freeze
-
-  def initialize
-    Amazon::Ecs::debug = ENV['mode'] == 'debug'
-    Amazon::Ecs.configure do |options|
-      options[:AWS_access_key_id] = ENV['AWS_ACCESS_KEY_ID']
-      options[:AWS_secret_key] = ENV['AWS_SECRET_KEY']
-      options[:associate_tag] = ENV['AMAZON_ASSOCIATE_TAG']
+  def exec
+    opt = { 'User-Agent' => USER_AGENT }
+    TARGET_ASINS.map do |asin|
+      sleep(1)
+      doc = Nokogiri::HTML(open(item_url(asin), opt))
+      price = doc.css('#priceblock_ourprice').text.tr('￥,','').strip.to_i
+      name = doc.css('#productTitle').text.strip
+      { name: name, price: price, url: item_url(asin) }
     end
   end
 
-  def response
-    @response ||= Amazon::Ecs.item_search(TARGET_NAME, country: 'jp', search_index: 'All', response_group: "ItemAttributes, OfferSummary")
-  end
-
-  def target_items
-    response.items.select { |item| TARGET_ASINS.include?(item.get('ASIN')) }
-  end
-
-  def met_items
-    target_items.select { |item| item.get(PRICE_XPATH).to_i <= BORDER_PRICE }
+  def item_url(asin)
+    "#{URL_BASE}#{asin}"
   end
 end
 
 class Formatter
   def basic_info(item)
-    "#{item.get(App::ITEM_NAME_XPATH)} 新品価格 #{item.get(App::PRICE_XPATH)}円"
+    "#{item[:name]} 新品価格 #{item[:price]}円"
   end
 
   def met_info(item)
-    "#{item.get(App::ITEM_NAME_XPATH)}が#{item.get(App::PRICE_XPATH)}円で販売開始されました。=> #{item.get(App::DETAIL_PAGE_URL_XPATH)}"
+    "#{item[:name]}が#{item[:price]}円で販売開始されました。=> #{item[:url]}"
   end
 end
 
@@ -74,10 +66,12 @@ notifier = Notifier.new
 logger = Logger.new
 
 logger.log("=======start======")
-#begin
-  logger.log(app.target_items.reduce('') { |a, e| a + formatter.basic_info(e) })
-  notifier.send(app.met_items.reduce('') { |a, e| a + formatter.met_info(e) })
-#rescue Amazon::RequestError
- # logger.log('request limit exceeded.')
-#end
+begin
+  app.exec.each do |item|
+    logger.log(formatter.basic_info(item))
+    notifier.send(formatter.met_info(item)) if item[:price] < App::BORDER_PRICE
+  end
+rescue => e
+  logger.log(e.message)
+end
 logger.log("=======end======")
