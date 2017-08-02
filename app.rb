@@ -1,6 +1,7 @@
-require 'dotenv/load'
-require 'amazon/ecs'
+require 'bundler/setup'
+require 'dotenv'
 require 'twitter'
+require 'nokogiri'
 
 class App
   TARGET_NAME = 'Nintendo Switch'
@@ -73,10 +74,10 @@ notifier = Notifier.new
 logger = Logger.new
 
 logger.log("=======start======")
-begin
+#begin
   logger.log(app.target_items.reduce('') { |a, e| a + formatter.basic_info(e) })
   notifier.send(app.met_items.reduce('') { |a, e| a + formatter.met_info(e) })
-rescue Amazon::RequestError
-  logger.log('request limit exceeded.')
-end
+#rescue Amazon::RequestError
+ # logger.log('request limit exceeded.')
+#end
 logger.log("=======end======")
